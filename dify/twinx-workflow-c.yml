@@ -1,0 +1,215 @@
+app:
+  description: 'TwinX — Workflow C: Surgical prompt assembly from approved gaps only'
+  icon: ✍️
+  icon_background: '#D1FAE5'
+  mode: workflow
+  name: twinx-workflow-c
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/vertex_ai:0.0.58@259b7320ab373c59b1fd03ace11fbfc11ce2121ab3dfa03ffe8ff6dcf33d554a
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 500
+        batch_count_limit: 50
+        file_size_limit: 50
+        image_file_size_limit: 100
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 200
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1781900000021-source-1781900000022-target
+      source: '1781900000021'
+      sourceHandle: source
+      target: '1781900000022'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1781900000022-source-1781900000023-target
+      source: '1781900000022'
+      sourceHandle: source
+      target: '1781900000023'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 'Inputs: original_prompt + approved_suggestions (post human review)'
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - label: Original Prompt
+          max_length: 48000
+          options: []
+          required: true
+          type: paragraph
+          variable: original_prompt
+        - label: Approved Suggestions
+          max_length: 48000
+          options: []
+          required: true
+          type: paragraph
+          variable: approved_suggestions
+      height: 116
+      id: '1781900000021'
+      position:
+        x: 78
+        y: 282
+      positionAbsolute:
+        x: 78
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 'SWAP MODEL: use Claude Sonnet (Vertex AI or Anthropic) for this node'
+        model:
+          completion_params:
+            temperature: 0.3
+            thinking_budget: 0
+          mode: chat
+          name: gemini-2.5-flash
+          provider: langgenius/vertex_ai/vertex_ai
+        prompt_template:
+        - id: c3d4e5f6-0003-0003-0003-000000000001
+          role: system
+          text: |
+            You are simultaneously a 20-year veteran sales CEO and an expert AI voice bot prompt engineer. Both halves of that identity are active at all times.
+
+            Your sales CEO side validates every change from a field perspective: does this instruction produce the right behavior in a real outbound mortgage or solar call? Is the recommended language natural, credible, and effective? Would a well-trained agent actually say this and get results?
+
+            Your prompt engineer side validates every change from a technical specification perspective: is this instruction precise enough for an AI to execute without ambiguity? Is it free of contradictions with existing rules? Is it placed in the right section so the AI encounters it at the right moment in the call flow?
+
+            You receive the original TwinX prompt and a list of human-approved gaps. Each gap includes a "Recommendation" field — the draft prompt language written by the analyst. Your job is to validate that recommendation through both lenses, refine it if needed, and insert it surgically.
+
+            Absolute rules — no exceptions:
+            1. PRESERVE ALL EXISTING TEXT VERBATIM. Every section, header, bullet, and sentence stays exactly as written unless a gap explicitly targets that specific text.
+            2. USE THE RECOMMENDATION AS YOUR DRAFT. Each approved gap includes a "Recommendation" field with the specific language to add. Start from that draft. Refine it only if your sales CEO side says the language would not produce effective behavior, or your prompt engineer side says it is too vague for an AI to execute. Do not rewrite it for style.
+            3. INSERT AT THE RIGHT LOCATION. Use the "Prompt section" field to find where it belongs. Place it at the most logical position within that section — after related rules, before conflicting ones.
+            4. DO NOT REWRITE FOR STYLE. If existing text already covers the spirit of a gap even partially, add only the specific missing detail from the Recommendation.
+            5. DO NOT CONSOLIDATE OR RESTRUCTURE. No merging sections, renaming headers, or reorganizing content. Insert only.
+            6. NEW SECTIONS ONLY AS LAST RESORT. Only if "Prompt section" says "NEW SECTION" and no existing section can accommodate it.
+            7. SKIP ALREADY-COVERED GAPS. If the existing prompt already substantively addresses a gap, skip it entirely.
+            8. OUTPUT ONLY THE COMPLETE PROMPT. Begin immediately with the first line. No preamble, no changelog.
+
+        - id: c3d4e5f6-0003-0003-0003-000000000002
+          role: user
+          text: |
+            Here is the original TwinX voice bot system prompt:
+
+            <original_prompt>
+            {{#1781900000021.original_prompt#}}
+            </original_prompt>
+
+            Here are the approved improvement suggestions with CEO recommendations:
+
+            <approved_suggestions>
+            {{#1781900000021.approved_suggestions#}}
+            </approved_suggestions>
+
+            For each approved gap, do a pre-pass before writing:
+            a) Read "Prompt section" — locate that section in the original prompt
+            b) Check if the existing section already substantively covers this — if YES, skip entirely
+            c) Read the "Recommendation" field — validate it through both lenses:
+               - Sales CEO: would this language produce effective behavior in a real call?
+               - Prompt engineer: is this precise enough for an AI to execute without ambiguity?
+               - Refine only if one of those checks fails. Otherwise use as-is.
+            d) Identify the exact insertion point within the section
+
+            Then output the complete prompt with only the validated recommendations inserted at their confirmed locations. Every part of the original prompt not directly targeted by an approved gap must appear unchanged.
+
+            Output ONLY the complete prompt. Begin immediately with the first line.
+
+        selected: false
+        title: Surgical Prompt Editor
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: '1781900000022'
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: 'Output: optimized_prompt (original + minimum viable additions only)'
+        outputs:
+        - value_selector:
+          - '1781900000022'
+          - text
+          variable: optimized_prompt
+        selected: false
+        title: End
+        type: end
+      height: 54
+      id: '1781900000023'
+      position:
+        x: 688
+        y: 282
+      positionAbsolute:
+        x: 688
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 38
+      y: 54
+      zoom: 1

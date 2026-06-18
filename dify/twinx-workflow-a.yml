@@ -1,0 +1,227 @@
+app:
+  description: 'TwinX — Workflow A: Prompt gap extraction from human agent transcripts'
+  icon: 🔍
+  icon_background: '#E0F2FE'
+  mode: workflow
+  name: twinx-workflow-a
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/vertex_ai:0.0.58@259b7320ab373c59b1fd03ace11fbfc11ce2121ab3dfa03ffe8ff6dcf33d554a
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 500
+        batch_count_limit: 50
+        file_size_limit: 50
+        image_file_size_limit: 100
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 200
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1781900000001-source-1781900000002-target
+      source: '1781900000001'
+      sourceHandle: source
+      target: '1781900000002'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1781900000002-source-1781900000003-target
+      source: '1781900000002'
+      sourceHandle: source
+      target: '1781900000003'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 'Inputs: original_prompt + batch_transcripts'
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - label: Original Prompt
+          max_length: 48000
+          options: []
+          required: true
+          type: paragraph
+          variable: original_prompt
+        - label: Batch Transcripts
+          max_length: 48000
+          options: []
+          required: true
+          type: paragraph
+          variable: batch_transcripts
+      height: 116
+      id: '1781900000001'
+      position:
+        x: 78
+        y: 282
+      positionAbsolute:
+        x: 78
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 'Gemini 2.5 Flash — identify prompt gaps from human agent transcripts'
+        model:
+          completion_params:
+            temperature: 0.3
+            thinking_budget: 0
+          mode: chat
+          name: gemini-2.5-flash
+          provider: langgenius/vertex_ai/vertex_ai
+        prompt_template:
+        - id: a1b2c3d4-0001-0001-0001-000000000001
+          role: system
+          text: |
+            You are a 20-year veteran sales CEO who has also deeply studied the TwinX voice bot prompt being evaluated. You have two jobs in one: find every sales failure in these calls with full relentlessness, then determine whether each failure is a TwinX prompt gap or just a human agent mistake.
+
+            Critical context:
+            1. These transcripts come from HUMAN agents, not TwinX. You are NOT coaching the humans. You are auditing the prompt. A human failing to follow the prompt is irrelevant. A human failing because the prompt gives no adequate guidance is a genuine prompt gap — TwinX would fail the same way.
+            2. These transcripts are ASR-generated from audio. Words may be wrong, sentences may be incomplete, speakers may talk over each other. When a single exchange is garbled and ambiguous, give benefit of the doubt. Only trust evidence that is clearly readable in context despite imperfect transcription.
+            3. Patterns matter more than single incidents. A failure appearing across multiple calls is almost certainly real. A single garbled exchange may be ASR noise.
+
+            Your three-step process for every failure you find:
+
+            STEP 1 — CEO LENS: Identify the failure bluntly. Was the objection handled without a pivot? Did the agent give up after one "not interested"? Was a qualifying question skipped? Was there a compliance breach? Did the agent attempt to explain complex loan products instead of routing to an officer? Be specific and unsparing.
+
+            STEP 2 — COVERAGE CHECK: Read the original prompt carefully. Find the section that should govern this situation. Then ask: if TwinX followed this prompt exactly, would it handle this correctly?
+            - If the prompt already gives explicit, adequate guidance → this is a HUMAN EXECUTION ERROR. Discard it. Do not output it.
+            - If the prompt is silent, vague, or gives only generic guidance that would not prevent this failure → this is a PROMPT GAP. Keep it.
+
+            STEP 3 — CONFIDENCE CHECK: How reliable is the evidence given ASR limitations?
+            - HIGH: Pattern appears across multiple calls with clear evidence, OR single call with a clean, unambiguous transcript excerpt.
+            - MEDIUM: Single call with moderately readable evidence, or recurring pattern where some instances are garbled.
+            - LOW: Single call with significantly garbled or ambiguous evidence. DISCARD LOW confidence items — they are likely ASR noise, not real patterns.
+
+            Output ONLY genuine prompt gaps that pass both the coverage check and the confidence check.
+            Output ONLY valid JSON — no markdown fences, no explanation, no preamble.
+
+        - id: a1b2c3d4-0001-0001-0001-000000000002
+          role: user
+          text: |
+            Here is the TwinX voice bot system prompt being evaluated:
+
+            <original_prompt>
+            {{#1781900000001.original_prompt#}}
+            </original_prompt>
+
+            Here are the human agent call transcripts to analyze:
+
+            <transcripts>
+            {{#1781900000001.batch_transcripts#}}
+            </transcripts>
+
+            For each transcript, apply the three-step process:
+
+            1. CEO LENS — Find every failure: premature surrender on objections, missing pivots, failure to probe the real objection, skipped qualifying questions, compliance issues, tone problems, agents explaining products instead of routing. Be relentless.
+
+            2. COVERAGE CHECK — For each failure, locate the relevant section of the original prompt. Ask: would TwinX following this prompt handle this correctly? If yes → discard (human error). If the prompt is silent or too vague → keep (prompt gap). Quote the relevant section name or state "not addressed" in the prompt_section field.
+
+            3. CONFIDENCE CHECK — Assess evidence quality. Is the transcript excerpt clean enough to be unambiguous despite ASR imperfections? Does this pattern repeat across calls? Discard LOW confidence items entirely.
+
+            Return a JSON array of only the genuine prompt gaps that survive both filters. Each item must have exactly these fields:
+            - "category": one of ["objection_handling", "asr_correction", "compliance", "qualifying_questions", "tone", "other"]
+            - "issue": one blunt sentence describing the prompt gap — what guidance is missing or inadequate
+            - "suggestion": one specific, actionable instruction describing what type of change is needed in the TwinX prompt
+            - "recommendation": the actual prompt language the CEO would write — the literal instruction or script line to add to the TwinX prompt, written as if you are authoring the prompt itself. This is not a description of the change; it is the change. Write it precisely enough that it could be dropped into the prompt as-is.
+            - "evidence": the transcript excerpt (≤150 chars) — must be readable in context despite ASR imperfections
+            - "confidence": "high" or "medium" only (LOW items are discarded before output)
+            - "prompt_section": name of the existing section this modifies, or "NEW SECTION" if none applies
+
+            If all failures in a transcript are human errors or low-confidence, skip that transcript entirely.
+            Return ONLY the JSON array. No other text.
+
+        selected: false
+        title: Extract Prompt Gaps
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: '1781900000002'
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: 'Output: suggestions (JSON array of genuine prompt gaps only)'
+        outputs:
+        - value_selector:
+          - '1781900000002'
+          - text
+          variable: suggestions
+        selected: false
+        title: End
+        type: end
+      height: 54
+      id: '1781900000003'
+      position:
+        x: 688
+        y: 282
+      positionAbsolute:
+        x: 688
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 38
+      y: 54
+      zoom: 1

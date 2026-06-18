@@ -2,10 +2,9 @@
 .env
 
 # Runtime files (sensitive call data and outputs — keep local only)
+inputs/
 transcripts/
-original_prompt.txt
-optimized_prompt.txt
-suggestions_for_review.txt
+outputs/
 
 # Python
 __pycache__/

@@ -9,11 +9,10 @@ then assembles the final optimized prompt via Workflow C.
 Usage:
     python optimize_prompt.py
 
-Required files (relative to this script):
-    original_prompt.txt          — the voice bot prompt to optimize (never mutated)
-    batch_transcripts.txt        — merged transcripts from the transcript-merger webapp
-       OR
-    transcripts/                 — folder of .docx / .txt transcript files
+Folder layout:
+    inputs/          — place your voice bot prompt here (any .md or .txt name)
+    transcripts/     — place .docx or .txt call transcripts here
+    outputs/         — suggestions_for_review.txt and optimized prompt written here
 
 Required environment variables (or edit the config block below):
     DIFY_BASE_URL                — e.g. https://api.dify.ai/v1
@@ -24,6 +23,7 @@ Required environment variables (or edit the config block below):
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -38,12 +38,10 @@ WORKFLOW_C_KEY   = os.environ.get("DIFY_WORKFLOW_C_KEY",   "")
 BATCH_CHAR_LIMIT = 8_000   # max chars per batch sent to Workflow A
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-DIR                     = Path(__file__).parent
-PROMPT_FILE             = DIR / "original_prompt.txt"
-MERGED_TRANSCRIPTS_FILE = DIR / "batch_transcripts.txt"
-TRANSCRIPTS_DIR         = DIR / "transcripts"
-SUGGESTIONS_REVIEW_FILE = DIR / "suggestions_for_review.txt"
-OPTIMIZED_PROMPT_FILE   = DIR / "optimized_prompt.txt"
+DIR             = Path(__file__).parent
+INPUTS_DIR      = DIR / "inputs"
+TRANSCRIPTS_DIR = DIR / "transcripts"
+OUTPUTS_DIR     = DIR / "outputs"
 
 
 # ── Transcript loading ────────────────────────────────────────────────────────
@@ -146,32 +144,57 @@ def call_dify(api_key: str, inputs: dict, label: str) -> dict:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def find_prompt_file() -> Path:
+    """Find any .md or .txt file in inputs/ — error if zero or more than one."""
+    if not INPUTS_DIR.exists():
+        sys.exit(
+            f"Error: inputs/ folder not found.\n"
+            f"Create it at {INPUTS_DIR} and place your prompt file inside."
+        )
+    candidates = list(INPUTS_DIR.glob("*.md")) + list(INPUTS_DIR.glob("*.txt"))
+    if not candidates:
+        sys.exit(f"Error: no .md or .txt file found in {INPUTS_DIR}/")
+    if len(candidates) > 1:
+        names = ", ".join(p.name for p in candidates)
+        sys.exit(f"Error: multiple prompt files found in inputs/ ({names}). Keep only one.")
+    return candidates[0]
+
+
 def main() -> None:
     print("=== TwinX Prompt Optimization Pipeline ===\n")
 
+    OUTPUTS_DIR.mkdir(exist_ok=True)
+    suggestions_review_file = OUTPUTS_DIR / "suggestions_for_review.txt"
+    optimized_prompt_file   = OUTPUTS_DIR / "optimized_prompt.md"
+
     # 1. Load original prompt (reference only — never written back)
-    if not PROMPT_FILE.exists():
-        sys.exit(f"Error: prompt file not found at {PROMPT_FILE}")
-    original_prompt = PROMPT_FILE.read_text(encoding="utf-8").strip()
-    print(f"Prompt loaded: {PROMPT_FILE.name}  ({len(original_prompt):,} chars)\n")
+    prompt_file = find_prompt_file()
+    original_prompt = prompt_file.read_text(encoding="utf-8").strip()
+    print(f"Prompt loaded: inputs/{prompt_file.name}  ({len(original_prompt):,} chars)\n")
+
+    # Resume shortcut: if suggestions file already exists, skip A+B
+    if suggestions_review_file.exists() and suggestions_review_file.stat().st_size > 0:
+        print(f"Found existing suggestions file: outputs/suggestions_for_review.txt")
+        answer = input("  Skip Workflows A+B and go straight to review? [Y/n]: ").strip().lower()
+        if answer in ("", "y", "yes"):
+            print()
+            approved = _human_review(suggestions_review_file)
+            _run_workflow_c(original_prompt, approved, optimized_prompt_file)
+            return
 
     # 2. Load transcripts
     transcripts: list[dict] = []
-    if MERGED_TRANSCRIPTS_FILE.exists() and MERGED_TRANSCRIPTS_FILE.stat().st_size > 0:
-        print(f"Reading merged transcripts: {MERGED_TRANSCRIPTS_FILE.name}")
-        transcripts = parse_merged_transcripts(MERGED_TRANSCRIPTS_FILE)
-    elif TRANSCRIPTS_DIR.exists():
-        print(f"Reading transcripts folder: {TRANSCRIPTS_DIR.name}/")
+    if TRANSCRIPTS_DIR.exists():
+        print(f"Reading transcripts folder: transcripts/")
         transcripts = load_docx_transcripts(TRANSCRIPTS_DIR) + load_txt_transcripts(TRANSCRIPTS_DIR)
     else:
         sys.exit(
-            f"No transcripts found.\n"
-            f"  Option A: place merged file at  {MERGED_TRANSCRIPTS_FILE}\n"
-            f"  Option B: place .docx/.txt files in  {TRANSCRIPTS_DIR}/"
+            f"No transcripts/ folder found.\n"
+            f"Create {TRANSCRIPTS_DIR}/ and place .docx or .txt transcript files inside."
         )
 
     if not transcripts:
-        sys.exit("Transcript source found but contained no transcripts.")
+        sys.exit("transcripts/ folder is empty — add .docx or .txt files and try again.")
 
     print(f"  {len(transcripts)} transcript(s) loaded\n")
 
@@ -198,6 +221,9 @@ def main() -> None:
         )
 
         raw = outputs.get("suggestions", "[]")
+        if isinstance(raw, str):
+            raw = re.sub(r'^```(?:json)?\s*', '', raw.strip())
+            raw = re.sub(r'\s*```$', '', raw)
         try:
             batch_suggestions = json.loads(raw) if isinstance(raw, str) else raw
             if not isinstance(batch_suggestions, list):
@@ -224,11 +250,16 @@ def main() -> None:
     print(f"  → Clustered output: {len(clustered):,} chars\n")
 
     # 6. Human gate
-    SUGGESTIONS_REVIEW_FILE.write_text(clustered, encoding="utf-8")
+    suggestions_review_file.write_text(clustered, encoding="utf-8")
+    approved = _human_review(suggestions_review_file)
+    _run_workflow_c(original_prompt, approved, optimized_prompt_file)
+
+
+def _human_review(suggestions_review_file: Path) -> str:
     print("─" * 60)
     print("  HUMAN REVIEW")
     print("─" * 60)
-    print(f"  File: {SUGGESTIONS_REVIEW_FILE}")
+    print(f"  File: outputs/suggestions_for_review.txt")
     print()
     print("  Read each suggestion.")
     print("  Delete any lines or blocks you want to EXCLUDE.")
@@ -236,18 +267,19 @@ def main() -> None:
     print()
     input("  Press ENTER when you have finished editing... ")
     print()
-
-    approved = SUGGESTIONS_REVIEW_FILE.read_text(encoding="utf-8").strip()
+    approved = suggestions_review_file.read_text(encoding="utf-8").strip()
     if not approved:
         sys.exit("No suggestions remain after review. Exiting without changes.")
     print(f"Approved suggestions: {len(approved):,} chars\n")
+    return approved
 
-    # 7. Workflow C — final prompt assembly (single, authoritative rewrite)
+
+def _run_workflow_c(original_prompt: str, approved: str, optimized_prompt_file: Path) -> None:
     print("── Workflow C: final prompt assembly ──")
     c_outputs = call_dify(
         WORKFLOW_C_KEY,
         inputs={
-            "original_prompt":    original_prompt,
+            "original_prompt":      original_prompt,
             "approved_suggestions": approved,
         },
         label="Workflow C",
@@ -255,15 +287,13 @@ def main() -> None:
     optimized = c_outputs.get("optimized_prompt", "")
     if not optimized:
         sys.exit("Error: Workflow C returned an empty optimized prompt.")
-
-    OPTIMIZED_PROMPT_FILE.write_text(optimized, encoding="utf-8")
-
+    optimized_prompt_file.write_text(optimized, encoding="utf-8")
     print()
     print("─" * 60)
     print("  DONE")
     print("─" * 60)
-    print(f"  Output: {OPTIMIZED_PROMPT_FILE}")
-    print(f"  Length: {len(optimized):,} chars  (was {len(original_prompt):,} chars)")
+    print(f"  Output: outputs/{optimized_prompt_file.name}")
+    print(f"  Original: {len(original_prompt):,} chars → Optimized: {len(optimized):,} chars")
 
 
 if __name__ == "__main__":

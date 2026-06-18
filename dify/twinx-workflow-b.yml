@@ -1,0 +1,219 @@
+app:
+  description: 'TwinX — Workflow B: Dedup and cluster prompt gaps by root cause'
+  icon: 🗂️
+  icon_background: '#FEF3C7'
+  mode: workflow
+  name: twinx-workflow-b
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: package
+  value:
+    plugin_unique_identifier: langgenius/vertex_ai:0.0.58@259b7320ab373c59b1fd03ace11fbfc11ce2121ab3dfa03ffe8ff6dcf33d554a
+kind: app
+version: 0.3.0
+workflow:
+  conversation_variables: []
+  environment_variables: []
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      enabled: false
+      fileUploadConfig:
+        audio_file_size_limit: 500
+        batch_count_limit: 50
+        file_size_limit: 50
+        image_file_size_limit: 100
+        video_file_size_limit: 100
+        workflow_file_upload_limit: 200
+      image:
+        enabled: false
+        number_limits: 3
+        transfer_methods: []
+      number_limits: 3
+    opening_statement: ''
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+      language: ''
+      voice: ''
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: start
+        targetType: llm
+      id: 1781900000011-source-1781900000012-target
+      source: '1781900000011'
+      sourceHandle: source
+      target: '1781900000012'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    - data:
+        isInIteration: false
+        isInLoop: false
+        sourceType: llm
+        targetType: end
+      id: 1781900000012-source-1781900000013-target
+      source: '1781900000012'
+      sourceHandle: source
+      target: '1781900000013'
+      targetHandle: target
+      type: custom
+      zIndex: 0
+    nodes:
+    - data:
+        desc: 'Input: all_suggestions (JSON array from all Workflow A batches)'
+        selected: false
+        title: Start
+        type: start
+        variables:
+        - label: All Suggestions
+          max_length: 200000
+          options: []
+          required: true
+          type: paragraph
+          variable: all_suggestions
+      height: 88
+      id: '1781900000011'
+      position:
+        x: 78
+        y: 282
+      positionAbsolute:
+        x: 78
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+          enabled: false
+          variable_selector: []
+        desc: 'Gemini 2.5 Flash — dedup by root cause, weight by confidence'
+        model:
+          completion_params:
+            temperature: 0.3
+            thinking_budget: 0
+          mode: chat
+          name: gemini-2.5-flash
+          provider: langgenius/vertex_ai/vertex_ai
+        prompt_template:
+        - id: b2c3d4e5-0002-0002-0002-000000000001
+          role: system
+          text: |
+            You are a ruthless editorial director with the judgment of a senior sales executive. You receive a JSON array of TwinX voice bot prompt gap suggestions — already filtered by Workflow A to remove human execution errors and low-confidence ASR noise. Your job is to collapse them into the shortest possible list of truly distinct, high-value prompt changes with zero redundancy.
+
+            Confidence weighting:
+            - HIGH confidence suggestions count as 2 toward the frequency score (strong evidence, clear pattern)
+            - MEDIUM confidence suggestions count as 1 toward the frequency score
+            - When merging items of mixed confidence, use the highest confidence level of the group as the cluster's confidence rating
+
+            Your standard for "same root cause":
+            - Two suggestions share a root cause if implementing one prompt change would fix both. Wording differences are irrelevant. Category label differences are irrelevant.
+            - If two suggestions cite the same transcript evidence, they are the same issue — merge immediately.
+            - If one suggestion is a specific case of another more general suggestion, absorb the specific one into the general one and increase the frequency count.
+
+            Three-pass merging process:
+            PASS 1 — Group by root cause across all categories. Ignore category labels during this pass — look only at what prompt change is required.
+            PASS 2 — For each group, write one authoritative consolidated suggestion covering all variants. Use the clearest, most actionable wording. Assign it to the most relevant category.
+            PASS 3 — Scan the consolidated list one final time. Ask: "If I implemented this change, would any other item on the list become redundant?" If yes, merge again.
+
+            After all three passes, every remaining item must represent a unique, non-overlapping prompt change. A frequency-1 item that is clearly a subset of a frequency-5 item must be absorbed, not listed separately.
+
+            Output ONLY the formatted review document — no preamble, no explanation.
+
+        - id: b2c3d4e5-0002-0002-0002-000000000002
+          role: user
+          text: |
+            Here are all the prompt gap suggestions collected across all transcript batches:
+
+            <all_suggestions>
+            {{#1781900000011.all_suggestions#}}
+            </all_suggestions>
+
+            Apply the three-pass merging process:
+
+            PASS 1 — Group every suggestion by root cause (same required prompt fix = same group), ignoring category labels and wording. Flag any that cite the same evidence as instant merges.
+
+            PASS 2 — Write one consolidated suggestion per group. Frequency score = sum of individual confidence weights (HIGH=2, MEDIUM=1). Record the highest confidence level in the group.
+
+            PASS 3 — Final redundancy scan. Absorb any remaining subsets into their parent cluster.
+
+            Output the final deduplicated list using this exact format:
+
+            ═══════════════════════════════════════
+            OBJECTION HANDLING  (weighted score: N)
+            ═══════════════════════════════════════
+
+            [score: X | confidence: high/medium] <consolidated issue — one blunt sentence describing the prompt gap>
+            Prompt section: <section name to modify, or NEW SECTION>
+            Recommendation: <the actual prompt language to add — the literal instruction, written as if authoring the TwinX prompt. Consolidate the best recommendation language across all merged items.>
+            Evidence: <most representative and readable transcript excerpt>
+
+            (repeat for each category with suggestions: objection_handling, asr_correction, compliance, qualifying_questions, tone, other)
+
+            Skip categories with zero suggestions.
+            Order clusters within each category by score, highest first.
+            The human reviewer will DELETE entire blocks they reject — make each block fully self-contained.
+            Each suggestion block must be ≤6 lines total.
+
+        selected: false
+        title: Dedup and Cluster
+        type: llm
+        variables: []
+        vision:
+          enabled: false
+      height: 98
+      id: '1781900000012'
+      position:
+        x: 382
+        y: 282
+      positionAbsolute:
+        x: 382
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        desc: 'Output: clustered_suggestions (formatted text for human review)'
+        outputs:
+        - value_selector:
+          - '1781900000012'
+          - text
+          variable: clustered_suggestions
+        selected: false
+        title: End
+        type: end
+      height: 54
+      id: '1781900000013'
+      position:
+        x: 688
+        y: 282
+      positionAbsolute:
+        x: 688
+        y: 282
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 38
+      y: 54
+      zoom: 1
