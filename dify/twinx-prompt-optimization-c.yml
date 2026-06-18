@@ -1,9 +1,13 @@
+# Creator: Jason Gu
+# Project: TwinX Prompt Optimization
+# Workflow: C — Apply approved field insights to produce the optimized prompt
+# Created: 2026-06-18
 app:
-  description: 'TwinX — Workflow C: Surgical prompt assembly from approved gaps only'
+  description: 'Creator: Jason Gu | Project: TwinX Prompt Optimization | Created: 2026-06-18 | Workflow C: Surgical prompt editing — add, replace, and remove based on approved field insights'
   icon: ✍️
   icon_background: '#D1FAE5'
   mode: workflow
-  name: twinx-workflow-c
+  name: twinx-prompt-optimization-c
   use_icon_as_answer_icon: false
 dependencies:
 - current_identifier: null
@@ -109,7 +113,7 @@ workflow:
         context:
           enabled: false
           variable_selector: []
-        desc: 'SWAP MODEL: use Claude Sonnet (Vertex AI or Anthropic) for this node'
+        desc: 'Gemini 2.5 Flash — apply approved field insights: add missing guidance, replace weak content, remove ineffective content'
         model:
           completion_params:
             temperature: 0.3
@@ -127,17 +131,18 @@ workflow:
 
             Your prompt engineer side validates every change from a technical specification perspective: is this instruction precise enough for an AI to execute without ambiguity? Is it free of contradictions with existing rules? Is it placed in the right section so the AI encounters it at the right moment in the call flow?
 
-            You receive the original TwinX prompt and a list of human-approved gaps. Each gap includes a "Recommendation" field — the draft prompt language written by the analyst. Your job is to validate that recommendation through both lenses, refine it if needed, and insert it surgically.
+            You receive the original TwinX prompt and a list of human-approved improvements derived from real call experience. Each improvement has a "change_type" field — add, replace, or remove — and your job is to apply it surgically.
 
             Absolute rules — no exceptions:
-            1. PRESERVE ALL EXISTING TEXT VERBATIM. Every section, header, bullet, and sentence stays exactly as written unless a gap explicitly targets that specific text.
-            2. USE THE RECOMMENDATION AS YOUR DRAFT. Each approved gap includes a "Recommendation" field with the specific language to add. Start from that draft. Refine it only if your sales CEO side says the language would not produce effective behavior, or your prompt engineer side says it is too vague for an AI to execute. Do not rewrite it for style.
-            3. INSERT AT THE RIGHT LOCATION. Use the "Prompt section" field to find where it belongs. Place it at the most logical position within that section — after related rules, before conflicting ones.
-            4. DO NOT REWRITE FOR STYLE. If existing text already covers the spirit of a gap even partially, add only the specific missing detail from the Recommendation.
-            5. DO NOT CONSOLIDATE OR RESTRUCTURE. No merging sections, renaming headers, or reorganizing content. Insert only.
-            6. NEW SECTIONS ONLY AS LAST RESORT. Only if "Prompt section" says "NEW SECTION" and no existing section can accommodate it.
-            7. SKIP ALREADY-COVERED GAPS. If the existing prompt already substantively addresses a gap, skip it entirely.
-            8. OUTPUT ONLY THE COMPLETE PROMPT. Begin immediately with the first line. No preamble, no changelog.
+            1. PRESERVE ALL EXISTING TEXT VERBATIM unless a gap explicitly targets that specific text for replacement or removal via its change_type field.
+            2. USE THE RECOMMENDATION AS YOUR DRAFT. Each approved gap includes a "recommendation" field with the specific language to add or replace with. Start from that draft. Refine it only if your sales CEO side says the language would not produce effective behavior, or your prompt engineer side says it is too vague for an AI to execute. Do not rewrite it for style.
+            3. INSERT OR REPLACE AT THE RIGHT LOCATION. Use the "prompt_section" field to find where it belongs. Place additions at the most logical position within that section — after related rules, before conflicting ones.
+            4. REMOVE OR REPLACE WEAK CONTENT. If a gap's change_type is "replace" or "remove", locate the exact existing text identified in the "existing_text" field and remove or replace it. Do NOT keep the old text alongside the new content — the old text must be gone.
+            5. DO NOT REWRITE FOR STYLE. If existing text already covers the spirit of an "add" gap even partially, add only the specific missing detail from the recommendation.
+            6. DO NOT CONSOLIDATE OR RESTRUCTURE. No merging sections, renaming headers, or reorganizing content beyond the targeted changes.
+            7. NEW SECTIONS ONLY AS LAST RESORT. Only if "prompt_section" says "NEW SECTION" and no existing section can accommodate it.
+            8. SKIP ALREADY-COVERED GAPS. If change_type is "add" and the existing prompt already substantively addresses the gap, skip it entirely.
+            9. OUTPUT ONLY THE COMPLETE PROMPT. Begin immediately with the first line. No preamble, no changelog.
 
         - id: c3d4e5f6-0003-0003-0003-000000000002
           role: user
@@ -148,22 +153,26 @@ workflow:
             {{#1781900000021.original_prompt#}}
             </original_prompt>
 
-            Here are the approved improvement suggestions with CEO recommendations:
+            Here are the approved improvement suggestions derived from real human call experience:
 
             <approved_suggestions>
             {{#1781900000021.approved_suggestions#}}
             </approved_suggestions>
 
-            For each approved gap, do a pre-pass before writing:
-            a) Read "Prompt section" — locate that section in the original prompt
-            b) Check if the existing section already substantively covers this — if YES, skip entirely
-            c) Read the "Recommendation" field — validate it through both lenses:
+            For each approved improvement, do a pre-pass before writing:
+            a) Read "change_type" — this tells you whether to add, replace, or remove content
+            b) Read "prompt_section" — locate that section in the original prompt
+            c) For "add": check if the section already substantively covers this — if YES, skip entirely
+            d) For "replace" or "remove": locate the exact text in "existing_text" — this text must be removed from the output regardless of what replaces it
+            e) Read the "recommendation" field — validate through both lenses:
                - Sales CEO: would this language produce effective behavior in a real call?
                - Prompt engineer: is this precise enough for an AI to execute without ambiguity?
                - Refine only if one of those checks fails. Otherwise use as-is.
-            d) Identify the exact insertion point within the section
+            f) For "add": identify the exact insertion point within the section
+               For "replace": swap the existing_text for the validated recommendation in-place
+               For "remove": delete the existing_text entirely with no replacement
 
-            Then output the complete prompt with only the validated recommendations inserted at their confirmed locations. Every part of the original prompt not directly targeted by an approved gap must appear unchanged.
+            Then output the complete prompt with all validated changes applied. Every part of the original prompt not directly targeted by an approved improvement must appear unchanged.
 
             Output ONLY the complete prompt. Begin immediately with the first line.
 

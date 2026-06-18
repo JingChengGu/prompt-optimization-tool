@@ -1,9 +1,13 @@
+# Creator: Jason Gu
+# Project: TwinX Prompt Optimization
+# Workflow: B — Deduplicate and cluster suggestions for human review
+# Created: 2026-06-18
 app:
-  description: 'TwinX — Workflow B: Dedup and cluster prompt gaps by root cause'
+  description: 'Creator: Jason Gu | Project: TwinX Prompt Optimization | Created: 2026-06-18 | Workflow B: Dedup and cluster prompt gaps by root cause'
   icon: 🗂️
   icon_background: '#FEF3C7'
   mode: workflow
-  name: twinx-workflow-b
+  name: twinx-prompt-optimization-b
   use_icon_as_answer_icon: false
 dependencies:
 - current_identifier: null
@@ -115,7 +119,7 @@ workflow:
         - id: b2c3d4e5-0002-0002-0002-000000000001
           role: system
           text: |
-            You are a ruthless editorial director with the judgment of a senior sales executive. You receive a JSON array of TwinX voice bot prompt gap suggestions — already filtered by Workflow A to remove human execution errors and low-confidence ASR noise. Your job is to collapse them into the shortest possible list of truly distinct, high-value prompt changes with zero redundancy.
+            You are a ruthless editorial director with the judgment of a senior sales executive. You receive a JSON array of TwinX voice bot prompt improvement suggestions — already filtered by Workflow A to remove human execution errors and low-confidence ASR noise. Each suggestion has a change_type of "add", "replace", or "remove". Your job is to collapse them into the shortest possible list of truly distinct, high-value prompt changes with zero redundancy.
 
             Confidence weighting:
             - HIGH confidence suggestions count as 2 toward the frequency score (strong evidence, clear pattern)
@@ -126,20 +130,24 @@ workflow:
             - Two suggestions share a root cause if implementing one prompt change would fix both. Wording differences are irrelevant. Category label differences are irrelevant.
             - If two suggestions cite the same transcript evidence, they are the same issue — merge immediately.
             - If one suggestion is a specific case of another more general suggestion, absorb the specific one into the general one and increase the frequency count.
+            - When merging suggestions with different change_types, use the change_type of the most specific / actionable item in the cluster.
 
             Three-pass merging process:
             PASS 1 — Group by root cause across all categories. Ignore category labels during this pass — look only at what prompt change is required.
-            PASS 2 — For each group, write one authoritative consolidated suggestion covering all variants. Use the clearest, most actionable wording. Assign it to the most relevant category.
+            PASS 2 — For each group, write one authoritative consolidated entry covering all variants. Use the clearest, most actionable wording. Assign it to the most relevant category.
             PASS 3 — Scan the consolidated list one final time. Ask: "If I implemented this change, would any other item on the list become redundant?" If yes, merge again.
 
             After all three passes, every remaining item must represent a unique, non-overlapping prompt change. A frequency-1 item that is clearly a subset of a frequency-5 item must be absorbed, not listed separately.
+
+            Critical for the Recommendation field:
+            The recommendation must be written as complete, ready-to-use prompt language — not a description of what to change. It should include the actual instructions TwinX will follow AND, wherever the guidance involves speaking to a prospect, example script lines showing exactly how TwinX would say it in a real call. A human reviewer must be able to read the recommendation and immediately understand both what TwinX will do and how it will sound on a call.
 
             Output ONLY the formatted review document — no preamble, no explanation.
 
         - id: b2c3d4e5-0002-0002-0002-000000000002
           role: user
           text: |
-            Here are all the prompt gap suggestions collected across all transcript batches:
+            Here are all the prompt improvement suggestions collected across all transcript batches:
 
             <all_suggestions>
             {{#1781900000011.all_suggestions#}}
@@ -149,27 +157,35 @@ workflow:
 
             PASS 1 — Group every suggestion by root cause (same required prompt fix = same group), ignoring category labels and wording. Flag any that cite the same evidence as instant merges.
 
-            PASS 2 — Write one consolidated suggestion per group. Frequency score = sum of individual confidence weights (HIGH=2, MEDIUM=1). Record the highest confidence level in the group.
+            PASS 2 — Write one consolidated entry per group. Frequency score = sum of individual confidence weights (HIGH=2, MEDIUM=1). Record the highest confidence level in the group.
 
             PASS 3 — Final redundancy scan. Absorb any remaining subsets into their parent cluster.
 
-            Output the final deduplicated list using this exact format:
+            Output the final deduplicated list using this exact format for each suggestion block:
+
+            ───────────────────────────────────────
+            [score: X | confidence: high/medium | change: add/replace/remove]
+            Category: <objection_handling / asr_correction / compliance / qualifying_questions / tone / other>
+            Issue: <one blunt sentence — what is missing, weak, or wrong in the current prompt>
+            Prompt Section: <section name to modify, or NEW SECTION>
+            Existing Text: <for replace/remove only — the exact current prompt text being changed. Leave blank for add.>
+            Recommendation:
+            <The full, ready-to-use prompt language. Write the actual instruction TwinX will follow. Where the guidance involves speaking to a prospect, include example script lines showing word-for-word how TwinX should handle it on a real call. Do not summarize — write the complete language the human reviewer can approve as-is.>
+            Evidence: <most representative and readable transcript excerpt>
+            ───────────────────────────────────────
+
+            Group suggestion blocks under category headers:
 
             ═══════════════════════════════════════
             OBJECTION HANDLING  (weighted score: N)
             ═══════════════════════════════════════
 
-            [score: X | confidence: high/medium] <consolidated issue — one blunt sentence describing the prompt gap>
-            Prompt section: <section name to modify, or NEW SECTION>
-            Recommendation: <the actual prompt language to add — the literal instruction, written as if authoring the TwinX prompt. Consolidate the best recommendation language across all merged items.>
-            Evidence: <most representative and readable transcript excerpt>
-
-            (repeat for each category with suggestions: objection_handling, asr_correction, compliance, qualifying_questions, tone, other)
+            (repeat header + blocks for each category that has suggestions: objection_handling, asr_correction, compliance, qualifying_questions, tone, other)
 
             Skip categories with zero suggestions.
             Order clusters within each category by score, highest first.
             The human reviewer will DELETE entire blocks they reject — make each block fully self-contained.
-            Each suggestion block must be ≤6 lines total.
+            Do NOT truncate or shorten the Recommendation field — full language is required for Workflow C to apply the change correctly.
 
         selected: false
         title: Dedup and Cluster
