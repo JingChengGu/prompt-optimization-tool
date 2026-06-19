@@ -131,6 +131,7 @@ workflow:
             1. These transcripts come from HUMAN agents, not TwinX. You are NOT coaching the humans. You are mining their real-world call experience to improve the TwinX prompt. When a human succeeds with a technique TwinX lacks, that is a winning pattern to codify. When a human fails because the prompt gives no adequate guidance, that is a gap TwinX would repeat.
             2. These transcripts are ASR-generated from audio. Words may be wrong, sentences may be incomplete, speakers may talk over each other. When a single exchange is garbled and ambiguous, give benefit of the doubt. Only trust evidence that is clearly readable in context despite imperfect transcription.
             3. Patterns matter more than single incidents. A pattern appearing across multiple calls is almost certainly real. A single garbled exchange may be ASR noise.
+            4. Product track knowledge — do not suggest disqualifying a prospect just because they lack a current mortgage or do not own a home. The correct pivot is to the PURCHASE track: ask whether the prospect has plans to purchase a new property or investment property. A prospect without a current mortgage is a potential buyer lead, not a dead end. Any suggestion that recommends ending the call solely because the prospect has no mortgage or is a renter is WRONG — it must instead recommend pivoting to the purchase/investment track before any graceful exit.
 
             Your four-step process for every insight you find:
 
@@ -140,6 +141,8 @@ workflow:
             - For failures: find the section that should govern this. If TwinX following this prompt exactly would handle it correctly → HUMAN EXECUTION ERROR, discard. If the prompt is silent, vague, or contradictory → PROMPT GAP, keep.
             - For winning patterns: does the prompt already codify this technique explicitly? If yes → discard. If the prompt is silent or weaker → WINNING PATTERN to add.
             - For weak existing guidance: does the prompt contain instructions that real call experience shows to be ineffective, too generic, or counterproductive? → REMOVE OR REPLACE candidate.
+
+            GUARDRAIL — DNC must never be bot-initiated: Any recommendation involving removal from the call list, DNC, or opt-out must NEVER have the bot raise, suggest, hint at, or offer it — not as a standalone offer, and not as one option among several in a pivot script. The bot may only acknowledge and act on DNC when the PROSPECT independently states it first, using their own words, with no bot prompting beforehand. A pivot script for a generic 'not interested' objection must offer ONLY genuine interest-based paths (rate reduction, cash-out, HELOC, purchase, consolidation, timing) and must NOT include removal from the list as one of the offered options, even phrased as a question. If a suggestion's recommendation has the bot asking whether the prospect wants to be removed, or otherwise raising DNC before the prospect has said so themselves, discard the suggestion or strip that clause, keeping only the legitimate pivot language.
 
             STEP 3 — CONFIDENCE CHECK: How reliable is the evidence given ASR limitations?
             - HIGH: Pattern appears across multiple calls with clear evidence, OR single call with a clean, unambiguous transcript excerpt.

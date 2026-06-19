@@ -107,7 +107,7 @@ workflow:
         context:
           enabled: false
           variable_selector: []
-        desc: 'Gemini 2.5 Flash — dedup by root cause, weight by confidence'
+        desc: 'Gemini 2.5 Flash — dedup by root cause, rank by impact, cap 4/category'
         model:
           completion_params:
             temperature: 0.3
@@ -121,10 +121,15 @@ workflow:
           text: |
             You are a ruthless editorial director with the judgment of a senior sales executive. You receive a JSON array of TwinX voice bot prompt improvement suggestions — already filtered by Workflow A to remove human execution errors and low-confidence ASR noise. Each suggestion has a change_type of "add", "replace", or "remove". Your job is to collapse them into the shortest possible list of truly distinct, high-value prompt changes with zero redundancy.
 
-            Confidence weighting:
-            - HIGH confidence suggestions count as 2 toward the frequency score (strong evidence, clear pattern)
-            - MEDIUM confidence suggestions count as 1 toward the frequency score
-            - When merging items of mixed confidence, use the highest confidence level of the group as the cluster's confidence rating
+            PRE-FILTER — DNC must never be bot-initiated: Before merging, check every incoming suggestion's recommendation field. If it has the bot asking, suggesting, or offering removal from the call list / DNC / opt-out as part of a pivot script or objection response — including as one of multiple options in a single question — strip that clause from the recommendation before merging, or discard the suggestion entirely if removing the clause leaves nothing useful. DNC handling may only appear in a recommendation when the existing_text or evidence field shows the PROSPECT raised it first, unprompted. Never let a merged recommendation combine a legitimate pivot with a bot-initiated DNC offer.
+
+            Confidence: when merging items of mixed confidence, use the HIGHEST confidence level among the merged items as the cluster's confidence. No numeric scoring.
+
+            HARD LIMIT: output a MAXIMUM of 4 suggestions per category, regardless of how many distinct root causes exist. If more than 4 genuine root causes remain after the three-pass merge, rank all candidates by overall impact and keep only the top 4. Impact ranking considers all of the following together, not as a strict priority order:
+            - Frequency: how many transcripts/batches independently surfaced this same root cause (a pattern appearing across many calls is more impactful than a one-off, even if the one-off is high confidence)
+            - Outcome severity: does this issue directly cause a lost transfer, a lost prospect, or a compliance risk — versus a minor tone or phrasing issue that doesn't change the call outcome
+            - Confidence: high confidence items are generally more trustworthy than medium, but a frequent medium-confidence pattern can outrank a rare high-confidence one if the medium-confidence pattern is clearly recurring and outcome-affecting
+            Weigh these together to judge true impact — do not mechanically sort by confidence alone. The goal is the 4 changes that would most improve real call outcomes if implemented.
 
             Your standard for "same root cause":
             - Two suggestions share a root cause if implementing one prompt change would fix both. Wording differences are irrelevant. Category label differences are irrelevant.
@@ -157,14 +162,14 @@ workflow:
 
             PASS 1 — Group every suggestion by root cause (same required prompt fix = same group), ignoring category labels and wording. Flag any that cite the same evidence as instant merges.
 
-            PASS 2 — Write one consolidated entry per group. Frequency score = sum of individual confidence weights (HIGH=2, MEDIUM=1). Record the highest confidence level in the group.
+            PASS 2 — Write one consolidated entry per group. Record the highest confidence level in the group.
 
-            PASS 3 — Final redundancy scan. Absorb any remaining subsets into their parent cluster.
+            PASS 3 — Final redundancy scan. Absorb any remaining subsets into their parent cluster. Then, if any category still has more than 4 items, rank all remaining candidates by overall impact — weighing frequency across transcripts, severity of the outcome it affects (lost transfer, lost prospect, compliance risk vs. minor tone), and confidence together — and keep only the top 4 highest-impact items. Discard the rest. Do not simply sort by confidence level.
 
             Output the final deduplicated list using this exact format for each suggestion block:
 
             ───────────────────────────────────────
-            [score: X | confidence: high/medium | change: add/replace/remove]
+            [confidence: high/medium | change: add/replace/remove]
             Category: <objection_handling / asr_correction / compliance / qualifying_questions / tone / other>
             Issue: <one blunt sentence — what is missing, weak, or wrong in the current prompt>
             Prompt Section: <section name to modify, or NEW SECTION>
@@ -177,13 +182,13 @@ workflow:
             Group suggestion blocks under category headers:
 
             ═══════════════════════════════════════
-            OBJECTION HANDLING  (weighted score: N)
+            OBJECTION HANDLING
             ═══════════════════════════════════════
 
             (repeat header + blocks for each category that has suggestions: objection_handling, asr_correction, compliance, qualifying_questions, tone, other)
 
             Skip categories with zero suggestions.
-            Order clusters within each category by score, highest first.
+            Order clusters within each category by confidence (high first, then medium).
             The human reviewer will DELETE entire blocks they reject — make each block fully self-contained.
             Do NOT truncate or shorten the Recommendation field — full language is required for Workflow C to apply the change correctly.
 
